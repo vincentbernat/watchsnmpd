@@ -128,7 +128,7 @@ main(int argc, char **argv) {
   char *command       = NULL;
 
   /* Parse arguments */
-  while ((ch = getopt(argc, argv, "di:t:e:x:")) != EOF)
+  while ((ch = getopt(argc, argv, "di:t:e:x:h")) != EOF)
     switch(ch) {
     case 'd':
       debug++;
@@ -145,8 +145,11 @@ main(int argc, char **argv) {
     case 'x':
       agentx_socket = optarg;
       break;
+    case 'h':
+      usage();
+      break;
     default:
-      fprintf(stderr, "unknown option %c\n", ch);
+      fprintf(stderr, "unknown option -%c\n", ch);
       usage();
     }
   if (optind != argc)
