@@ -35,6 +35,7 @@ usage() {
 	 "\t-d: enable debug mode\n"
          "\t-i INTERVAL: interval to use between two pings\n"
          "\t-t TIMEOUT: timeout for detecting hanged master agent\n"
+         "\t-e EXEC: exec this command when a timeout occurs\n"
 	 "\t-x ADDRESS: connect to master agent at ADDRESS\n");
   exit(0);
 }
@@ -47,7 +48,7 @@ stop_server(int a) {
 }
 
 void
-loop(int timeout) {
+loop(int timeout, const char *command) {
   struct timeval snmp_timer_wait, *timer_wait;
   int snmpblock = 0;
   int fdsetsize;
@@ -58,7 +59,7 @@ loop(int timeout) {
 
   keep_running = 1;
   signal(SIGTERM, stop_server);
-  signal(SIGINT,  stop_server);  
+  signal(SIGINT,  stop_server);
   while (keep_running) {
     fdsetsize = FD_SETSIZE;
     snmpblock = 1;
@@ -95,8 +96,26 @@ loop(int timeout) {
       log_warnx("while %s, we were blocked for %f seconds",
                 (num==0)?"handling alarms":"reading packets",
                 diff);
+      if (command) {
+        log_info("running `%s'", command);
+        num = system(command);
+        switch (num) {
+        case -1: log_warn("unable to execute `%s'", command); break;
+        default:
+          if (WIFEXITED(num) && WEXITSTATUS(num) == 0)
+            log_info("command `%s' executed succesfully", command);
+          else if (WIFEXITED(num))
+            log_warn("command `%s' exited with status %d",
+                      command, WEXITSTATUS(num));
+          else if (WIFSIGNALED(num))
+            log_warn("command `%s' terminated by signal %d",
+                      command, WTERMSIG(num));
+          else
+            log_warn("command `%s' exited suspiciously", command);
+        }
+      }
     }
-  }  
+  }
 }
 
 int
@@ -106,9 +125,10 @@ main(int argc, char **argv) {
   int   interval      = 5;
   int   timeout       = 2;
   char *agentx_socket = NULL;
+  char *command       = NULL;
 
   /* Parse arguments */
-  while ((ch = getopt(argc, argv, "di:t:x:")) != EOF)
+  while ((ch = getopt(argc, argv, "di:t:e:x:")) != EOF)
     switch(ch) {
     case 'd':
       debug++;
@@ -118,6 +138,9 @@ main(int argc, char **argv) {
       break;
     case 't':
       timeout = atoi(optarg);
+      break;
+    case 'e':
+      command = optarg;
       break;
     case 'x':
       agentx_socket = optarg;
@@ -155,7 +178,7 @@ main(int argc, char **argv) {
   if (!debug && (daemon(0, 0) != 0))
     fatal("failed to detach daemon");
 
-  loop(timeout);
+  loop(timeout, command);
 
   return 0;
 }
